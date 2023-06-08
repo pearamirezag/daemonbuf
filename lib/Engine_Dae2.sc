@@ -2,6 +2,7 @@ Engine_Dae2 : CroneEngine {
 
 	var <params;
 	var synth, winenv, winenv2, winenv3, winenv4, z, y, w, v, compGain;
+	var oscs;
 
 	*new { arg context, doneCallback;
 		^super.new(context, doneCallback);
@@ -14,6 +15,13 @@ Engine_Dae2 : CroneEngine {
 
 		// added master db
 		// added compressor
+		oscs = Dictionary.new();
+
+		oscs.put("position",OSCFunc({ 
+			arg msg;
+				 NetAddr("127.0.0.1", 10111).sendMsg("progress",msg[3]); 
+				//msg.postln;
+		}, '/position'));
 
 
 		SynthDef(\DaemonBuf, {
@@ -89,15 +97,17 @@ Engine_Dae2 : CroneEngine {
 
 			ptrPlay = Phasor.ar(
 				trig: \trigPlay.tr(1),
-				rate: BufRateScale.kr(buf.bufnum)*\ratePlay.kr(1).lag(ratePlayLag),
+				rate: BufRateScale.kr(buf.bufnum)*ratePlay.lag(ratePlayLag),
 				start: 0,
 				end: frames,
 				resetPos: start / frames);
 
-			SendReply.kr(Impulse.kr(18), '/ptrs', [ptrRec/frames, ptrPlay/frames], 69);
+			//SendReply.kr(Impulse.kr(1),'/ptrVal',values: [Amplitude.kr(rec), Amplitude.kr(in)], replyID: 66);
+
+			SendReply.kr(Impulse.kr(18), '/position', [ptrRec/frames, ptrPlay/frames], 69);
 
 			recz = BufWr.ar(
-				inputArray: recIn.sum * rec_db, //audioIn
+				inputArray: recIn.sum * rec_db.dbamp, //audioIn
 				bufnum: buf.bufnum,
 				phase: ptrRec,
 				loop: recLoop
@@ -135,11 +145,13 @@ Engine_Dae2 : CroneEngine {
 
 			mix =  ((decimator<1)*mix)+((decimator>1)*Decimator.ar(mix, TChoose.kr(rTrigz, [44100,8000, 16000, 12000, 6000, 35000,2]).lag(0), decimator));
 
-			mix = LeakDC.ar(mix) * master_db;
+			mix = LeakDC.ar(mix);
 
 			LocalOut.ar(mix);
 
 			mix = mix * compGain.(mix, threshold: -15, slope: -2, attack: 0.1, release: 0.3);
+			
+			mix = mix * master_db.dbamp; 
 
 			Out.ar(outBus, mix);
 		}).add;
@@ -149,46 +161,8 @@ Engine_Dae2 : CroneEngine {
 
 		synth = Synth(\DaemonBuf, [\outBus, context.out_b.index], target: context.xg);
 
-		/*params = Dictionary.newFrom([
-		\rate, 1,
-		\recLoop, 1,
-		\outBus, 0,
-		\selRate, 0.5
-		]);*/
-
-
-		/*		this.addCommand("rate", "i", {|msg|
-		synth.set(\rate, msg[1]);
-		});
-
-		this.addCommand("recLoop", "i", {|msg|
-		synth.set(\recLoop, msg[1]);
-		});
-
-		this.addCommand("selRate", "i", {|msg|
-		synth.set(\selRate, msg[1]);
-		});
-
-		this.addCommand("in_db", "i", {|msg|
-		synth.set(\in_db, msg[1]);
-		});*/
-
-
-
-		/*	decimator = 0, frames = 0, brick = 1.5,
-
-		in_db = -6.0,
-		overdub_db = -12.0,
-		rec_db = -6.0,
-		grain_db = -3.0,
-		loop_db = -3.0,
-		direct_db = -3.0,
-
-		burstRate = 1, grainRate = 5,
-		rateRec = 1, rateRecLag = 0, start = 0, recLoop = 1, playLoop = 1,
-
-		outBus = 0;*/
-
+	
+		
 		this.addCommand("decimator", "f", {|msg|
 			synth.set(\decimator, msg[1]);
 		});
